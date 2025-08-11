@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  calendar:
+    build: .
+    ports:
+      - "8777:8080"
+    environment:
+      - PORT=8080
+    restart: unless-stopped 
