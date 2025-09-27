@@ -21,11 +21,13 @@ HTTP_PASSWORD=secret
 1. ```docker-compose build``` (перед сборкой выключите VPN)
 2. ```docker-compose up```
 
-После сборки сервер будет доступен на порту `:8777`
+#### После сборки сервер будет доступен на порту `:8777`
+
+---
 
 ### CRUD операции:
 
-#### Создание события
+- #### Создание события
 ```http
 POST http://localhost:8777/create_event
 Content-Type: application/json
@@ -34,11 +36,11 @@ Content-Type: application/json
     "id": 1,
     "user_id": 1,
     "date": "2025-08-11",
-    "title": "but potatkkko"
+    "title": "Learning English"
 }
 ```
 
-#### Обновление события
+- #### Обновление события
 ```http
 POST http://localhost:8777/update_event
 Content-Type: application/json
@@ -50,7 +52,7 @@ Content-Type: application/json
 }
 ```
 
-#### Удаление события
+- #### Удаление события
 ```http
 POST http://localhost:8777/delete_event
 Content-Type: application/json
@@ -60,7 +62,7 @@ Content-Type: application/json
 }
 ```
 
-### Получение событий (GET запросы)
+- ### Получение событий (GET запросы)
 
 #### События на день
 ```http
@@ -96,5 +98,40 @@ Content-Type: application/json
 ```
 --- 
 
+### Структура ответов
+
+#### Успешный ответ
+```json
+{
+    "result": "данные"
+}
+```
+
+#### Ответ с ошибкой
+```json
+{
+    "error": "описание ошибки"
+}
+```
+
+### Валидация и возможные ошибки
+
+#### HTTP статус-коды:
+- **200 OK** - успешное выполнение запроса
+- **400 Bad Request** - ошибки валидации входных данных
+- **503 Service Unavailable** - ошибки бизнес-логики
+- **500 Internal Server Error** - прочие ошибки сервера
+
+#### ошибки валидации (400):
+- `"title cannot be empty"` - пустое поле title при создании/обновлении события
+- `"invalid date format, expected YYYY-MM-DD"` - некорректный формат даты
+- `"invalid request body"` - некорректный JSON в теле запроса
+
+#### Возможные ошибки бизнес-логики (503):
+- `"event not found"` - попытка обновить или удалить несуществующее событие
+
+---
+
 ### Тесты
 Для запуска тестов воспользуйтесь командой `make test`
+
