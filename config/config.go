@@ -8,10 +8,12 @@ import (
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
+// Config представляет структуру конфигурации
 type Config struct {
 	HTTPServer HTTPServer `yaml:"http_server"`
 }
 
+// HTTPServer содержит настройки конфигурации HTTP-сервера
 type HTTPServer struct {
 	Address     string        `yaml:"address" env:"HTTP_ADDRESS"`
 	Timeout     time.Duration `yaml:"timeout" env:"HTTP_TIMEOUT"`
@@ -20,10 +22,11 @@ type HTTPServer struct {
 	Password    string        `yaml:"password" env:"HTTP_PASSWORD"`
 }
 
+// MustLoad загружает конфигурацию из файла и переменных окружения
 func MustLoad() *Config {
 	configPath := os.Getenv("CONFIG_PATH")
 	if configPath == "" {
-		configPath = "./config.yaml" // дефолт
+		configPath = "./config.yaml" // defolt
 	}
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {

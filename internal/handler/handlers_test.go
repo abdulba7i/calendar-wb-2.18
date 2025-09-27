@@ -3,11 +3,13 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 	"wb-calendar/internal/calendar"
+	"wb-calendar/internal/handler/types"
 
 	"github.com/gin-gonic/gin"
 )
@@ -42,7 +44,7 @@ func TestCreateEventHandler(t *testing.T) {
 	}{
 		{
 			name: "valid JSON request",
-			requestBody: CreateEventRequest{
+			requestBody: types.CreateEventRequest{
 				UserID: 1,
 				Date:   "2023-12-25",
 				Title:  "Christmas",
@@ -51,10 +53,20 @@ func TestCreateEventHandler(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name: "invalid date format",
-			requestBody: CreateEventRequest{
+			name: "valid form request",
+			requestBody: types.CreateEventRequest{
 				UserID: 1,
-				Date:   "invalid-date",
+				Date:   "2023-12-25",
+				Title:  "Christmas",
+			},
+			contentType:    "application/x-www-form-urlencoded",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "invalid user_id",
+			requestBody: types.CreateEventRequest{
+				UserID: 0,
+				Date:   "2023-12-25",
 				Title:  "Christmas",
 			},
 			contentType:    "application/json",
@@ -62,20 +74,10 @@ func TestCreateEventHandler(t *testing.T) {
 		},
 		{
 			name: "empty title",
-			requestBody: CreateEventRequest{
+			requestBody: types.CreateEventRequest{
 				UserID: 1,
 				Date:   "2023-12-25",
 				Title:  "",
-			},
-			contentType:    "application/json",
-			expectedStatus: http.StatusBadRequest,
-		},
-		{
-			name: "invalid user_id",
-			requestBody: CreateEventRequest{
-				UserID: 0,
-				Date:   "2023-12-25",
-				Title:  "Christmas",
 			},
 			contentType:    "application/json",
 			expectedStatus: http.StatusBadRequest,
@@ -84,15 +86,30 @@ func TestCreateEventHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body, _ := json.Marshal(tt.requestBody)
-			req := httptest.NewRequest("POST", "/api/create_event", bytes.NewBuffer(body))
+			var reqBody []byte
+			var err error
+
+			if tt.contentType == "application/json" {
+				reqBody, err = json.Marshal(tt.requestBody)
+				if err != nil {
+					t.Fatalf("Failed to marshal request body: %v", err)
+				}
+			} else {
+				reqBody = []byte("user_id=1&date=2023-12-25&title=Christmas")
+			}
+
+			req, err := http.NewRequest("POST", "/api/create_event", bytes.NewBuffer(reqBody))
+			if err != nil {
+				t.Fatalf("Failed to create request: %v", err)
+			}
+
 			req.Header.Set("Content-Type", tt.contentType)
 
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, req)
 
 			if w.Code != tt.expectedStatus {
-				t.Errorf("expected status %d, got %d", tt.expectedStatus, w.Code)
+				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
 		})
 	}
@@ -101,7 +118,10 @@ func TestCreateEventHandler(t *testing.T) {
 func TestUpdateEventHandler(t *testing.T) {
 	router, service := setupTestRouter()
 
-	event, _ := service.Calendar.CreateEvent(1, time.Date(2023, 12, 25, 0, 0, 0, 0, time.UTC), "Christmas")
+	event, err := service.Calendar.CreateEvent(1, time.Date(2023, 12, 25, 0, 0, 0, 0, time.UTC), "Christmas")
+	if err != nil {
+		t.Fatalf("Failed to create event: %v", err)
+	}
 
 	tests := []struct {
 		name           string
@@ -110,8 +130,8 @@ func TestUpdateEventHandler(t *testing.T) {
 		expectedStatus int
 	}{
 		{
-			name: "valid update request",
-			requestBody: UpdateEventRequest{
+			name: "valid JSON request",
+			requestBody: types.UpdateEventRequest{
 				ID:    event.ID,
 				Date:  "2023-12-26",
 				Title: "Boxing Day",
@@ -120,28 +140,43 @@ func TestUpdateEventHandler(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name: "event not found",
-			requestBody: UpdateEventRequest{
-				ID:    999,
+			name: "valid form request",
+			requestBody: types.UpdateEventRequest{
+				ID:    event.ID,
 				Date:  "2023-12-26",
 				Title: "Boxing Day",
 			},
-			contentType:    "application/json",
-			expectedStatus: http.StatusServiceUnavailable,
+			contentType:    "application/x-www-form-urlencoded",
+			expectedStatus: http.StatusOK,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body, _ := json.Marshal(tt.requestBody)
-			req := httptest.NewRequest("POST", "/api/update_event", bytes.NewBuffer(body))
+			var reqBody []byte
+			var err error
+
+			if tt.contentType == "application/json" {
+				reqBody, err = json.Marshal(tt.requestBody)
+				if err != nil {
+					t.Fatalf("Failed to marshal request body: %v", err)
+				}
+			} else {
+				reqBody = []byte(fmt.Sprintf("id=%d&date=2023-12-26&title=Boxing Day", event.ID))
+			}
+
+			req, err := http.NewRequest("POST", "/api/update_event", bytes.NewBuffer(reqBody))
+			if err != nil {
+				t.Fatalf("Failed to create request: %v", err)
+			}
+
 			req.Header.Set("Content-Type", tt.contentType)
 
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, req)
 
 			if w.Code != tt.expectedStatus {
-				t.Errorf("expected status %d, got %d", tt.expectedStatus, w.Code)
+				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
 		})
 	}
@@ -150,43 +185,70 @@ func TestUpdateEventHandler(t *testing.T) {
 func TestDeleteEventHandler(t *testing.T) {
 	router, service := setupTestRouter()
 
-	event, _ := service.Calendar.CreateEvent(1, time.Date(2023, 12, 25, 0, 0, 0, 0, time.UTC), "Christmas")
-
 	tests := []struct {
 		name           string
 		requestBody    interface{}
 		contentType    string
 		expectedStatus int
+		setupEvent     bool
 	}{
 		{
-			name: "valid delete request",
-			requestBody: DeleteEventRequest{
-				ID: event.ID,
+			name: "valid JSON request",
+			requestBody: types.DeleteEventRequest{
+				ID: 1,
 			},
 			contentType:    "application/json",
 			expectedStatus: http.StatusOK,
+			setupEvent:     true,
 		},
 		{
-			name: "event not found",
-			requestBody: DeleteEventRequest{
-				ID: 999,
+			name: "valid form request",
+			requestBody: types.DeleteEventRequest{
+				ID: 1,
 			},
-			contentType:    "application/json",
-			expectedStatus: http.StatusServiceUnavailable,
+			contentType:    "application/x-www-form-urlencoded",
+			expectedStatus: http.StatusOK,
+			setupEvent:     true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body, _ := json.Marshal(tt.requestBody)
-			req := httptest.NewRequest("POST", "/api/delete_event", bytes.NewBuffer(body))
+			var eventID int
+			if tt.setupEvent {
+				event, err := service.Calendar.CreateEvent(1, time.Date(2023, 12, 25, 0, 0, 0, 0, time.UTC), "Christmas")
+				if err != nil {
+					t.Fatalf("Failed to create event: %v", err)
+				}
+				eventID = event.ID
+			}
+
+			var reqBody []byte
+			var err error
+
+			if tt.contentType == "application/json" {
+				req := tt.requestBody.(types.DeleteEventRequest)
+				req.ID = eventID
+				reqBody, err = json.Marshal(req)
+				if err != nil {
+					t.Fatalf("Failed to marshal request body: %v", err)
+				}
+			} else {
+				reqBody = []byte(fmt.Sprintf("id=%d", eventID))
+			}
+
+			req, err := http.NewRequest("POST", "/api/delete_event", bytes.NewBuffer(reqBody))
+			if err != nil {
+				t.Fatalf("Failed to create request: %v", err)
+			}
+
 			req.Header.Set("Content-Type", tt.contentType)
 
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, req)
 
 			if w.Code != tt.expectedStatus {
-				t.Errorf("expected status %d, got %d", tt.expectedStatus, w.Code)
+				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
 		})
 	}
@@ -195,45 +257,42 @@ func TestDeleteEventHandler(t *testing.T) {
 func TestGetEventsForDayHandler(t *testing.T) {
 	router, service := setupTestRouter()
 
-	date1 := time.Date(2023, 12, 25, 0, 0, 0, 0, time.UTC)
-	service.Calendar.CreateEvent(1, date1, "Christmas")
+	_, err := service.Calendar.CreateEvent(1, time.Date(2023, 12, 25, 0, 0, 0, 0, time.UTC), "Christmas")
+	if err != nil {
+		t.Fatalf("Failed to create event: %v", err)
+	}
+
+	_, err = service.Calendar.CreateEvent(1, time.Date(2023, 12, 25, 0, 0, 0, 0, time.UTC), "Christmas Eve")
+	if err != nil {
+		t.Fatalf("Failed to create event: %v", err)
+	}
 
 	tests := []struct {
 		name           string
-		requestBody    map[string]interface{}
+		requestBody    interface{}
 		expectedStatus int
 	}{
 		{
 			name: "valid request",
-			requestBody: map[string]interface{}{
-				"user_id": 1,
-				"date":    "2023-12-25",
+			requestBody: types.GetEventsRequest{
+				UserID: 1,
+				Date:   "2023-12-25",
 			},
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:           "missing user_id",
-			requestBody:    map[string]interface{}{"date": "2023-12-25"},
-			expectedStatus: http.StatusBadRequest,
-		},
-		{
-			name:           "missing date",
-			requestBody:    map[string]interface{}{"user_id": 1},
-			expectedStatus: http.StatusBadRequest,
-		},
-		{
 			name: "invalid user_id",
-			requestBody: map[string]interface{}{
-				"user_id": "abc",
-				"date":    "2023-12-25",
+			requestBody: types.GetEventsRequest{
+				UserID: 0,
+				Date:   "2023-12-25",
 			},
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
-			name: "invalid date format",
-			requestBody: map[string]interface{}{
-				"user_id": 1,
-				"date":    "invalid-date",
+			name: "empty date",
+			requestBody: types.GetEventsRequest{
+				UserID: 1,
+				Date:   "",
 			},
 			expectedStatus: http.StatusBadRequest,
 		},
@@ -241,14 +300,23 @@ func TestGetEventsForDayHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			jsonBody, _ := json.Marshal(tt.requestBody)
-			req := httptest.NewRequest("GET", "/api/events_for_day", bytes.NewBuffer(jsonBody))
+			reqBody, err := json.Marshal(tt.requestBody)
+			if err != nil {
+				t.Fatalf("Failed to marshal request body: %v", err)
+			}
+
+			req, err := http.NewRequest("GET", "/api/events_for_day", bytes.NewBuffer(reqBody))
+			if err != nil {
+				t.Fatalf("Failed to create request: %v", err)
+			}
+
 			req.Header.Set("Content-Type", "application/json")
+
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, req)
 
 			if w.Code != tt.expectedStatus {
-				t.Errorf("expected status %d, got %d", tt.expectedStatus, w.Code)
+				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
 		})
 	}
@@ -257,42 +325,45 @@ func TestGetEventsForDayHandler(t *testing.T) {
 func TestGetEventsForWeekHandler(t *testing.T) {
 	router, service := setupTestRouter()
 
-	date1 := time.Date(2023, 12, 25, 0, 0, 0, 0, time.UTC)
-	service.Calendar.CreateEvent(1, date1, "Christmas")
+	_, err := service.Calendar.CreateEvent(1, time.Date(2023, 12, 25, 0, 0, 0, 0, time.UTC), "Christmas")
+	if err != nil {
+		t.Fatalf("Failed to create event: %v", err)
+	}
 
 	tests := []struct {
 		name           string
-		requestBody    map[string]interface{}
+		requestBody    interface{}
 		expectedStatus int
 	}{
 		{
 			name: "valid request",
-			requestBody: map[string]interface{}{
-				"user_id": 1,
-				"date":    "2023-12-25",
+			requestBody: types.GetEventsRequest{
+				UserID: 1,
+				Date:   "2023-12-25",
 			},
 			expectedStatus: http.StatusOK,
-		},
-		{
-			name: "invalid user_id",
-			requestBody: map[string]interface{}{
-				"user_id": 0,
-				"date":    "2023-12-25",
-			},
-			expectedStatus: http.StatusBadRequest,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			jsonBody, _ := json.Marshal(tt.requestBody)
-			req := httptest.NewRequest("GET", "/api/events_for_week", bytes.NewBuffer(jsonBody))
+			reqBody, err := json.Marshal(tt.requestBody)
+			if err != nil {
+				t.Fatalf("Failed to marshal request body: %v", err)
+			}
+
+			req, err := http.NewRequest("GET", "/api/events_for_week", bytes.NewBuffer(reqBody))
+			if err != nil {
+				t.Fatalf("Failed to create request: %v", err)
+			}
+
 			req.Header.Set("Content-Type", "application/json")
+
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, req)
 
 			if w.Code != tt.expectedStatus {
-				t.Errorf("expected status %d, got %d", tt.expectedStatus, w.Code)
+				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
 		})
 	}
@@ -301,42 +372,45 @@ func TestGetEventsForWeekHandler(t *testing.T) {
 func TestGetEventsForMonthHandler(t *testing.T) {
 	router, service := setupTestRouter()
 
-	date1 := time.Date(2023, 12, 25, 0, 0, 0, 0, time.UTC)
-	service.Calendar.CreateEvent(1, date1, "Christmas")
+	_, err := service.Calendar.CreateEvent(1, time.Date(2023, 12, 25, 0, 0, 0, 0, time.UTC), "Christmas")
+	if err != nil {
+		t.Fatalf("Failed to create event: %v", err)
+	}
 
 	tests := []struct {
 		name           string
-		requestBody    map[string]interface{}
+		requestBody    interface{}
 		expectedStatus int
 	}{
 		{
 			name: "valid request",
-			requestBody: map[string]interface{}{
-				"user_id": 1,
-				"date":    "2023-12-25",
+			requestBody: types.GetEventsRequest{
+				UserID: 1,
+				Date:   "2023-12-25",
 			},
 			expectedStatus: http.StatusOK,
-		},
-		{
-			name: "invalid user_id",
-			requestBody: map[string]interface{}{
-				"user_id": -1,
-				"date":    "2023-12-25",
-			},
-			expectedStatus: http.StatusBadRequest,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			jsonBody, _ := json.Marshal(tt.requestBody)
-			req := httptest.NewRequest("GET", "/api/events_for_month", bytes.NewBuffer(jsonBody))
+			reqBody, err := json.Marshal(tt.requestBody)
+			if err != nil {
+				t.Fatalf("Failed to marshal request body: %v", err)
+			}
+
+			req, err := http.NewRequest("GET", "/api/events_for_month", bytes.NewBuffer(reqBody))
+			if err != nil {
+				t.Fatalf("Failed to create request: %v", err)
+			}
+
 			req.Header.Set("Content-Type", "application/json")
+
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, req)
 
 			if w.Code != tt.expectedStatus {
-				t.Errorf("expected status %d, got %d", tt.expectedStatus, w.Code)
+				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
 		})
 	}

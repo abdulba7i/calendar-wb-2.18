@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// InitRoute инициализирует HTTP-маршруты и миддлвейр
 func InitRoute(service *calendar.Service) *gin.Engine {
 	r := gin.Default()
 

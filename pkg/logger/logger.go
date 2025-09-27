@@ -6,8 +6,10 @@ import (
 	"go.uber.org/zap"
 )
 
+// Log глобальный экземпляро
 var Log *zap.SugaredLogger
 
+// Init инициализация
 func Init() {
 	zapLogger, err := zap.NewDevelopment()
 	if err != nil {
@@ -16,6 +18,7 @@ func Init() {
 	Log = zapLogger.Sugar()
 }
 
+// Sync очищает буферы
 func Sync() {
 	if Log != nil {
 		_ = Log.Sync()

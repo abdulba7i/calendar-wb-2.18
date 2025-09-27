@@ -6,12 +6,14 @@ import (
 	"wb-calendar/pkg"
 )
 
+// Calendar представляет сервис календаря с событиями
 type Calendar struct {
 	events map[int]Event
 	nextID int
 	mutex  sync.RWMutex
 }
 
+// NewCalendar создает новый экземпляр календаря
 func NewCalendar() *Calendar {
 	return &Calendar{
 		events: make(map[int]Event),
